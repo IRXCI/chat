@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package chat;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/IRXCI/chat-server/pkg/auth;auth";
+
+service ChatAPI {
+  rpc CreateChat(CreateChatRequest) returns (CreateChatResponse);
+  rpc DeleteChat(DeleteChatRequest) returns (google.protobuf.Empty);
+  rpc SendMessage(SendChatRequest) returns (google.protobuf.Empty);
+}
+
+message CreateChatRequest{
+    repeated string usernames = 1;
+}
+
+message CreateChatResponse{
+    int64 id = 1;
+}
+
+message DeleteChatRequest{
+    int64 id = 1;
+}
+
+message SendChatRequest{
+    string from = 1;
+    string text = 2;
+    google.protobuf.Timestamp timestamp = 3;
+}
