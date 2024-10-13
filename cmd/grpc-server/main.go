@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"flag"
 	"log"
 	"net"
 
+	"github.com/IRXCI/chat/config"
 	"github.com/brianvoe/gofakeit"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
@@ -14,14 +16,18 @@ import (
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
-const grpcPort = 50051
-
 type server struct {
 	desc.UnimplementedChatAPIServer
+	pool *pgxpool.Pool
+}
+
+var configPath string
+
+func init() {
+	flag.StringVar(&configPath, "config-path", "../../.env", "path to config file")
 }
 
 func (s *server) CreateChat(_ context.Context, _ *desc.CreateChatRequest) (*desc.CreateChatResponse, error) {
-	log.Printf("CreateChat working...")
 
 	return &desc.CreateChatResponse{
 		Id: gofakeit.Int64(),
@@ -39,18 +45,39 @@ func (s *server) SendMessage(_ context.Context, _ *desc.SendChatRequest) (*empty
 }
 
 func main() {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
+
+	flag.Parse()
+	ctx := context.Background()
+
+	err := config.Load(configPath)
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+
+	grpcConfig, err := config.NewGRPCConfig()
+	if err != nil {
+		log.Fatalf("failed to get grpc config: %v", err)
+	}
+
+	pgConfig, err := config.NewPGConfig()
+	if err != nil {
+		log.Fatalf("failed to get pg config: %v", err)
+	}
+
+	lis, err := net.Listen("tcp", grpcConfig.Address())
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
+	pool, err := pgxpool.Connect(ctx, pgConfig.DSN())
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
 	s := grpc.NewServer()
 	reflection.Register(s)
-	desc.RegisterChatAPIServer(s, &server{})
+	desc.RegisterChatAPIServer(s, &server{pool: pool})
 
 	log.Printf("server listening at %v", lis.Addr())
-
-	if err = s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
 }
