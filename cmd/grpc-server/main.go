@@ -79,7 +79,7 @@ func (s *server) DeleteChat(ctx context.Context, req *desc.DeleteChatRequest) (*
 	return &emptypb.Empty{}, nil
 }
 
-func (s *server) SendMessage(ctx context.Context, req *desc.SendChatRequest) (*emptypb.Empty, error) {
+func (s *server) SendMessage(_ context.Context, _ *desc.SendChatRequest) (*emptypb.Empty, error) {
 
 	log.Printf("SendMessage is working...")
 	return nil, nil
