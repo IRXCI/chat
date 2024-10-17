@@ -6,13 +6,14 @@ import (
 	"log"
 	"net"
 
-	"github.com/IRXCI/chat/config"
-	"github.com/brianvoe/gofakeit"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/lib/pq"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/IRXCI/chat-server/config"
 	desc "github.com/IRXCI/chat-server/pkg/chat"
+	sq "github.com/Masterminds/squirrel"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -27,20 +28,60 @@ func init() {
 	flag.StringVar(&configPath, "config-path", "../../.env", "path to config file")
 }
 
-func (s *server) CreateChat(_ context.Context, _ *desc.CreateChatRequest) (*desc.CreateChatResponse, error) {
+func (s *server) CreateChat(ctx context.Context, req *desc.CreateChatRequest) (*desc.CreateChatResponse, error) {
+
+	builderCreateChat := sq.Insert("chat").
+		PlaceholderFormat(sq.Dollar).
+		Columns("user_names").
+		Values(pq.Array(req.GetUsernames())).
+		Suffix("RETURNING id")
+
+	query, args, err := builderCreateChat.ToSql()
+	if err != nil {
+		log.Printf("failes to build query: %v", err)
+		return nil, err
+	}
+
+	var ChatID int64
+	err = s.pool.QueryRow(ctx, query, args...).Scan(&ChatID)
+	if err != nil {
+		log.Printf("failed to insert chat: %v", err)
+		return nil, err
+	}
+
+	log.Printf("Insert chat with id: %d", ChatID)
 
 	return &desc.CreateChatResponse{
-		Id: gofakeit.Int64(),
+		Id: ChatID,
 	}, nil
 }
 
-func (s *server) DeleteChat(_ context.Context, _ *desc.DeleteChatRequest) (*emptypb.Empty, error) {
-	log.Printf("DeleteChat working...")
-	return nil, nil
+func (s *server) DeleteChat(ctx context.Context, req *desc.DeleteChatRequest) (*emptypb.Empty, error) {
+
+	builderDeleteChat := sq.Delete("chat").
+		PlaceholderFormat(sq.Dollar).
+		Where(sq.Eq{"id": req.GetId()})
+
+	query, args, err := builderDeleteChat.ToSql()
+	if err != nil {
+		log.Printf("failes to build query: %v", err)
+		return nil, err
+	}
+
+	_, err = s.pool.Exec(ctx, query, args...)
+	if err != nil {
+		log.Printf("failes to delete chat: %v", err)
+		return nil, err
+	}
+
+	log.Printf("Deleted chat with id: %v", req.GetId())
+
+	return &emptypb.Empty{}, nil
 }
 
-func (s *server) SendMessage(_ context.Context, _ *desc.SendChatRequest) (*emptypb.Empty, error) {
-	log.Printf("SendMessage working...")
+func (s *server) SendMessage(ctx context.Context, req *desc.SendChatRequest) (*emptypb.Empty, error) {
+
+	log.Printf("SendMessage is working...")
 	return nil, nil
 }
 
@@ -80,4 +121,8 @@ func main() {
 	desc.RegisterChatAPIServer(s, &server{pool: pool})
 
 	log.Printf("server listening at %v", lis.Addr())
+
+	if err = s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 }
