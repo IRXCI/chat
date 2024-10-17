@@ -9,7 +9,7 @@ const (
 	dsnEnvName = "PG_DSN"
 )
 
-// interface for PGConfig
+// PGConfig ... Конфигурация PostgreSQL
 type PGConfig interface {
 	DSN() string
 }
@@ -18,7 +18,7 @@ type pgConfig struct {
 	dsn string
 }
 
-// func for NewPGConfig
+// NewPGConfig ... Создает новую конфигурацию PostgreSQL
 func NewPGConfig() (PGConfig, error) {
 	dsn := os.Getenv(dsnEnvName)
 	if len(dsn) == 0 {
